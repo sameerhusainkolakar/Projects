@@ -1,0 +1,137 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+from PIL import Image, ImageTk
+import os
+import cv2
+import numpy as np
+from skimage.feature import hog
+from skimage import exposure
+
+def extract_features(image_path):
+    if not os.path.exists(image_path):
+        raise ValueError(f"Image file does not exist at path: {image_path}")
+    
+    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise ValueError(f"Image at path {image_path} could not be loaded.")
+    
+    # Resize the image for uniform feature extraction
+    image = cv2.resize(image, (256, 256))  # Adjust size for palm prints
+    
+    # Using HOG to extract features
+    features, hog_image = hog(image, orientations=9, pixels_per_cell=(16, 16),
+                              cells_per_block=(2, 2), visualize=True, feature_vector=True)
+    
+    hog_image_rescaled = exposure.rescale_intensity(hog_image, in_range=(0, 10))
+    
+    return features, image
+
+def match_palmprints(features_list):
+    matching_results = []
+    for i in range(len(features_list)):
+        for j in range(i + 1, len(features_list)):
+            distance = np.linalg.norm(features_list[i] - features_list[j])
+            match = distance < 0.4  # Adjust threshold for palm print matching
+            matching_results.append((i, j, match))
+    return matching_results
+
+def load_image(label, feature_var, text):
+    file_path = filedialog.askopenfilename()
+    if file_path:
+        try:
+            features, image = extract_features(file_path)
+            image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_GRAY2RGB))
+            image = image.resize((200, 200))
+            photo = ImageTk.PhotoImage(image)
+            label.config(image=photo, text=text, compound="top")
+            label.image = photo
+            feature_var.append(features)
+            return file_path
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            return None
+    else:
+        messagebox.showwarning("Warning", "No file selected")
+        return None
+
+def compare_palmprints():
+    if len(features_list) < 4:
+        messagebox.showwarning("Warning", "All four images must be loaded before comparison")
+        return
+
+    try:
+        matching_results = match_palmprints(features_list)
+        detailed_result = "\tMatching Results:\n\n"
+        for i, j, match in matching_results:
+            if match:
+                detailed_result += f"Palm Print {i+1} and Palm Print {j+1} match.\n"
+            else:
+                detailed_result += f"Palm Print {i+1} and Palm Print {j+1} do not match.\n"
+
+        detailed_result_text.set(detailed_result)
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+
+root = tk.Tk()
+root.title("Palm Print Recognition System")
+root.geometry("900x800")
+root.configure(bg="#f0f0f0", borderwidth=4, relief="solid")
+
+# Apply style
+style = ttk.Style()
+style.configure("TButton", padding=6, relief="flat", background="#cce7ff", foreground="#000000")
+style.configure("TLabel", background="#f0f0f0", foreground="#000000", font=("Helvetica", 12))
+style.configure("Heading.TLabel", font=("Helvetica", 24, "bold"), background="#d3d3d3", foreground="#333333")
+
+# Heading Frame with thin black border
+heading_frame = tk.Frame(root, bg="#d3d3d3", borderwidth=1, relief="solid")
+heading_frame.pack(pady=20)
+
+# Heading Label
+heading_label = ttk.Label(heading_frame, text="Palm Print Recognition System", style="Heading.TLabel")
+heading_label.pack(padx=10, pady=10)
+
+features_list = []
+
+frame = ttk.Frame(root)
+frame.pack(pady=20, padx=10)
+
+placeholder_image = Image.new('RGB', (200, 200), color='#d3d3d3')  # Light gray background
+placeholder_photo = ImageTk.PhotoImage(placeholder_image)
+
+label1 = ttk.Label(frame, image=placeholder_photo, text="Palm Print 1", compound="top", padding=10, borderwidth=4, relief="solid")
+label1.grid(row=0, column=0, padx=10)
+label1.image = placeholder_photo
+
+label2 = ttk.Label(frame, image=placeholder_photo, text="Palm Print 2", compound="top", padding=10, borderwidth=4, relief="solid")
+label2.grid(row=0, column=1, padx=10)
+label2.image = placeholder_photo
+
+label3 = ttk.Label(frame, image=placeholder_photo, text="Palm Print 3", compound="top", padding=10, borderwidth=4, relief="solid")
+label3.grid(row=0, column=2, padx=10)
+label3.image = placeholder_photo
+
+label4 = ttk.Label(frame, image=placeholder_photo, text="Palm Print 4", compound="top", padding=10, borderwidth=4, relief="solid")
+label4.grid(row=0, column=3, padx=10)
+label4.image = placeholder_photo
+
+load_button1 = ttk.Button(frame, text="Load Palm Print 1", command=lambda: load_image(label1, features_list, "Palm Print 1"))
+load_button1.grid(row=1, column=0, pady=10)
+
+load_button2 = ttk.Button(frame, text="Load Palm Print 2", command=lambda: load_image(label2, features_list, "Palm Print 2"))
+load_button2.grid(row=1, column=1, pady=10)
+
+load_button3 = ttk.Button(frame, text="Load Palm Print 3", command=lambda: load_image(label3, features_list, "Palm Print 3"))
+load_button3.grid(row=1, column=2, pady=10)
+
+load_button4 = ttk.Button(frame, text="Load Palm Print 4", command=lambda: load_image(label4, features_list, "Palm Print 4"))
+load_button4.grid(row=1, column=3, pady=10)
+
+compare_button = ttk.Button(root, text="Compare Palm Prints", command=compare_palmprints)
+compare_button.pack(pady=(20, 10), ipadx=20, ipady=10)
+
+detailed_result_text = tk.StringVar()
+detailed_result_label = ttk.Label(root, textvariable=detailed_result_text, font=("Helvetica", 14), anchor="center", justify="left")
+detailed_result_label.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
+
+root.mainloop()
